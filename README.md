@@ -1,0 +1,8 @@
+---
+title: research_agent
+app_file: main.py
+sdk: gradio
+sdk_version: 5.49.1
+emoji: 🚀
+short_description: Agentic AI for conducting research
+---
