@@ -1,7 +1,7 @@
 import os
 from agents import ModelSettings, function_tool
 from init_agent import initAgent
-from serpapi import GoogleSearch
+import serpapi
 
 INSTRUCTIONS = (
     "You are a research assistant. Given a search term, use your google_search tool to search the web for that term and "
@@ -28,7 +28,7 @@ def google_search(q:str):
         "api_key": os.environ.get("SERPAPI_API_KEY")
     }
 
-    search = GoogleSearch(params)
+    search = serpapi.search(params)
     results = search.get_dict()
     organic_results = results["organic_results"]
     return organic_results
