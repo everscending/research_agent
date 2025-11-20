@@ -6,7 +6,10 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "dotenv>=0.9.9",
+    "google-search-results>=2.4.2",
     "gradio>=5.49.1",
     "mailtrap>=2.3.0",
+    "openai>=2.7.1",
     "openai-agents>=0.4.2",
+    "serpapi>=0.1.5",
 ]

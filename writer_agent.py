@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from agents import function_tool
 from init_agent import initAgent
 
 INSTRUCTIONS = (
@@ -22,8 +23,28 @@ class ReportData(BaseModel):
     follow_up_questions: list[str] = Field(description="Suggested topics to research further")
 
 
-writer_agent = initAgent(
-    name="WriterAgent",
-    instructions=INSTRUCTIONS,
-    output_type=ReportData
-)
+@function_tool
+def submit_report(short_summary: str, markdown_report: str, follow_up_questions: list[str]) -> dict:
+    """Write a report based on the query and search results.
+    
+    Args:
+        short_summary (str): A short 2-3 sentence summary of the findings.
+        markdown_report (str): The final report.
+        follow_up_questions (list[str]): Suggested topics to research further.
+
+    Returns:
+        ReportData: A report data object.
+    
+    """
+    report = ReportData(short_summary=short_summary, markdown_report=markdown_report, follow_up_questions=follow_up_questions)
+    return report.model_dump_json()
+
+def getWriterAgent():
+    agent = initAgent(
+        name="WriterAgent",
+        instructions=INSTRUCTIONS,
+        tools=[submit_report],
+        output_type=None,
+    )
+    agent.tool_use_behavior = "stop_on_first_tool"
+    return agent

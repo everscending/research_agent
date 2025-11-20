@@ -1,9 +1,9 @@
 import time
 from agents import Runner, trace, gen_trace_id
-from search_agent import search_agent
-from planner_agent import planner_agent, WebSearchItem, WebSearchPlan
-from writer_agent import writer_agent, ReportData
-from email_agent import email_agent
+from search_agent import getSearchAgent
+from planner_agent import getPlannerAgent, WebSearchItem, WebSearchPlan
+from writer_agent import getWriterAgent, ReportData
+from email_agent import getEmailAgent
 import asyncio
 
 class ResearchManager:
@@ -19,9 +19,13 @@ class ResearchManager:
             print("Starting research...")
             search_plan = await self.plan_searches(query)
             yield "Searches planned, starting to search..."     
-            search_results = await self.perform_searches(search_plan)
+            search_results = await self.perform_searches_parallel(search_plan)
+            
+            print(f"search_results: {search_results}")
+
             yield "Searches complete, writing report..."
             report = await self.write_report(query, search_results)
+
             yield "Report written, sending email..."
             await self.send_email(report)
             yield "Email sent, research complete"
@@ -39,55 +43,41 @@ class ResearchManager:
 
         print("Planning searches...")
         result = await Runner.run(
-            planner_agent,
+            getPlannerAgent(),
             f"Query: {query}",
         )
-        print(f"Will perform {len(result.final_output.searches)} searches")
+        
+        plan = WebSearchPlan.model_validate_json(result.final_output)
+        print(f"Will perform {len(plan.searches)} searches")
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         print(f"Execution time: {elapsed_time:.4f} seconds")
-        return result.final_output_as(WebSearchPlan)
+        return plan
 
-    async def perform_searches(self, search_plan: WebSearchPlan) -> list[str]:
+    async def perform_searches_parallel(self, search_plan: WebSearchPlan) -> list[str]:
         """ Perform the searches to perform for the query """
         print("Searching...")
-        num_completed = 0
-        # tasks = [asyncio.create_task(self.search(item)) for item in search_plan.searches]
-        # results = []
-        # for task in asyncio.as_completed(tasks):
-        #     result = await task
-        #     if result is not None:
-        #         results.append(result)
-        #     num_completed += 1
-        #     print(f"Searching... {num_completed}/{len(tasks)} completed: {item.query}")
 
-        # tasks = [asyncio.create_task(self.search(item)) for item in search_plan.searches]
-        results = []
-        for item in search_plan.searches:
-            start_time = time.perf_counter()
-
-            task = asyncio.create_task(self.search(item))
-            result = await task
-            if result is not None:
-                results.append(result)
-            num_completed += 1
-            print(f"Searching... {num_completed}/{len(search_plan.searches)} completed: {item.query}")
-
-            end_time = time.perf_counter()
-            elapsed_time = end_time - start_time
-            print(f"Execution time: {elapsed_time:.4f} seconds")
-            
-        print("Finished searching")
-        return results
+        tasks = [asyncio.create_task(self.search(item)) for item in search_plan.searches]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        successful_results = [result for result in results if result is not None]
+        print(f"Finished searching. {len(successful_results)}/{len(results)} searches successful")
+        return successful_results
 
     async def search(self, item: WebSearchItem) -> str | None:
         """ Perform a search for the query """
         input = f"Search term: {item.query}\nReason for searching: {item.reason}"
         try:
+            start_time = time.perf_counter()
+
             result = await Runner.run(
-                search_agent,
+                getSearchAgent(),
                 input,
             )
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
+            print(f"Search term: {item.query}, Execution time: {elapsed_time:.4f} seconds")
+
             return str(result.final_output)
         except Exception:
             return None
@@ -99,20 +89,24 @@ class ResearchManager:
         print(f"Thinking about report...\n\n{input}")
         start_time = time.perf_counter()
         result = await Runner.run(
-            writer_agent,
+            getWriterAgent(),
             input,
         )
+
+        report = ReportData.model_validate_json(result.final_output)
         print("Finished writing report")
+
         end_time = time.perf_counter()
         elapsed_time = end_time - start_time
         print(f"Execution time: {elapsed_time:.4f} seconds")
-        return result.final_output_as(ReportData)
+        
+        return report
     
     async def send_email(self, report: ReportData) -> None:
         print("Writing email...")
         start_time = time.perf_counter()
         result = await Runner.run(
-            email_agent,
+            getEmailAgent(),
             report.markdown_report,
         )
         print("Email sent")
